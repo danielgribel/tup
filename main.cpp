@@ -20,6 +20,16 @@
 
 #define pii std::pair<int, int>
 
+struct ProblemData {
+	int nTeams;
+	int nRounds;
+	int n;
+	int** dist;
+	int** opponents;	
+};
+
+ProblemData problemData;
+
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
 }
@@ -38,7 +48,18 @@ std::string strip( const std::string &s ) {
 
 bool bothAreSpaces(char lhs, char rhs) { return (lhs == rhs) && (lhs == ' '); }
 
-int cost(pii** solution, int** dist, int nRounds, int n) {
+void deleteMatrix(int** matrix, int n) {
+	for(int i = 0; i < n; i++) {
+        delete [] matrix[i];
+    }
+    delete [] matrix;
+}
+
+int cost(pii** solution) {
+	int** dist = problemData.dist;
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+
 	int cost = 0;
 
 	for(int i = 0; i < n; i++) {
@@ -47,6 +68,79 @@ int cost(pii** solution, int** dist, int nRounds, int n) {
 		}
 	}
 	return cost;
+}
+
+void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents) {
+	problemData.nTeams = nTeams;
+	problemData.nRounds = nRounds;
+	problemData.n = n;
+	problemData.dist = dist;
+	problemData.opponents = opponents;
+}
+
+void printSolution(pii** solution) {
+	for(int i = 0; i < problemData.nRounds; i++) {
+		for(int j = 0; j < problemData.n; j++) {
+			std::cout << "(" << solution[i][j].first << ", " << solution[i][j].second << ") ";
+		}
+		std::cout << std::endl;
+	}
+}
+
+void shuffle(int* myArray, size_t n) {
+    for(int i = 0; i < n; i++) {
+        myArray[i] = i;
+    }
+    if(n > 1) {
+        size_t i;
+        for (int i = 0; i < n - 1; i++) {
+            size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
+            int t = myArray[j];
+            myArray[j] = myArray[i];
+            myArray[i] = t;
+        }
+    }
+}
+
+
+// mutation: 1 <= mutateRate <= nRounds
+pii** mutation(pii** solution, int mutationRate) {
+	int nRounds = problemData.nRounds;
+	int nTeams = problemData.nTeams;
+	int n = problemData.n;
+
+	int* shRounds = new int[nRounds];
+	shuffle(shRounds, nRounds);
+
+	pii** newsolution = new pii*[problemData.nRounds];
+	for(int i = 0; i < problemData.nRounds; i++) {
+		newsolution[i] = new pii[problemData.n];
+		for(int j = 0; j < problemData.n; j++) {
+			//copying solution to newsolution
+			newsolution[i][j] = solution[i][j];
+		}
+	}
+
+	int r;
+	int r1;
+	int r2;
+	pii temp;
+	
+	for(int i = 0; i < mutationRate; i++) {
+		r = shRounds[i]; // random slot
+		int* shGames = new int[n];
+		shuffle(shGames, n);
+		r1 = shGames[0];
+		r2 = shGames[1];
+		temp = newsolution[r][r1];
+		newsolution[r][r1] = newsolution[r][r2];
+		newsolution[r][r2] = temp;
+		delete [] shGames;
+	}
+
+	delete [] shRounds;
+	
+	return newsolution;
 }
 
 void loadData() {
@@ -141,13 +235,9 @@ void loadData() {
 		}
 	}
 
-	for(int i = 0; i < nRounds; i++) {
-		for(int j = 0; j < n; j++) {
-			std::cout << "(" << solution[i][j].first << ", " << solution[i][j].second << ") ";
-		}
-		std::cout << std::endl;
-	}
-
+	setProblemData(nTeams, nRounds, n, dist, opponents);	
+	pii** newsolution = mutation(solution, 5);
+	deleteMatrix(games, nRounds);
 }
 
 int main() {

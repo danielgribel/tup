@@ -152,6 +152,37 @@ pii** mutation(pii** solution, int mutationRate) {
 	return newsolution;
 }
 
+// Feasibility test for constraint (3):
+// Every umpire sees every team at least once at the team’s home
+void feasibility3(pii** solution) {
+	int nRounds = problemData.nRounds;
+	int nTeams = problemData.nTeams;
+	int n = problemData.n;
+	int* homeVisited = new int[nTeams];
+	int venue;
+	int contVenues = 0;
+	int nViolations = 0;
+
+	for(int u = 0; u < n; u++) {
+		for(int i = 0; i < nTeams; i++) {
+			homeVisited[i] = 0;
+		}
+		for(int i = 0; i < nRounds; i++) {
+			venue = solution[i][u].first;
+			if(homeVisited[venue] == 0) {
+				homeVisited[venue] = 1;
+				contVenues = contVenues + 1;
+			}
+		}
+	}
+
+	nViolations = nTeams*n - contVenues;
+	
+	std::cout << "nViolations (c3) = " << nViolations << std::endl;
+
+	delete[] homeVisited;
+}
+
 // Feasibility test for constraint (4):
 // No umpire is in a home site more than once in any n - d1 consecutive slots
 void feasibility4(pii** solution, int timewindow) {
@@ -311,6 +342,7 @@ void loadData() {
 
 	printSolution(newsolution);
 
+	feasibility3(newsolution);
 	feasibility4(newsolution, 4);
 	feasibility5(newsolution, 2);
 

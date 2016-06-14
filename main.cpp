@@ -55,6 +55,14 @@ void deleteMatrix(int** matrix, int n) {
     delete [] matrix;
 }
 
+void deleteSolution(pii** solution) {
+	int nRounds = problemData.nRounds;
+	for(int i = 0; i < nRounds; i++) {
+        delete [] solution[i];
+    }
+    delete [] solution;
+}
+
 int cost(pii** solution) {
 	int** dist = problemData.dist;
 	int nRounds = problemData.nRounds;
@@ -103,7 +111,8 @@ void shuffle(int* myArray, size_t n) {
 }
 
 
-// mutation: 1 <= mutateRate <= nRounds
+// mutation
+// 1 <= mutateRate <= nRounds
 pii** mutation(pii** solution, int mutationRate) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
@@ -141,6 +150,34 @@ pii** mutation(pii** solution, int mutationRate) {
 	delete [] shRounds;
 	
 	return newsolution;
+}
+
+// Test feasibility for constraint 4:
+// No umpire is in a home site more than once in any n - d1 consecutive slots
+void feasibility4(pii** solution, int timewindow) {
+	int nRounds = problemData.nRounds;
+	int nTeams = problemData.nTeams;
+	int n = problemData.n;
+	int* lastVisited = new int[nTeams];
+	int venue;
+	int nViolations = 0;
+
+	for(int u = 0; u < n; u++) {
+		for(int i = 0; i < nTeams; i++) {
+			lastVisited[i] = -1*timewindow;
+		}
+		for(int i = 0; i < nRounds; i++) {
+			venue = solution[i][u].first;
+			if(i - lastVisited[venue] < timewindow) {
+				nViolations = nViolations + 1;
+			}
+			lastVisited[venue] = i;
+		}
+	}
+
+	delete[] lastVisited;
+
+	std::cout << "nViolations = " << nViolations << std::endl;
 }
 
 void loadData() {
@@ -235,9 +272,24 @@ void loadData() {
 		}
 	}
 
-	setProblemData(nTeams, nRounds, n, dist, opponents);	
-	pii** newsolution = mutation(solution, 5);
+	std::vector< pii** > population;
+	setProblemData(nTeams, nRounds, n, dist, opponents);
+	pii** newsolution = mutation(solution, nRounds);
+
+	printSolution(solution);
+
+	feasibility4(solution, 4);
+
+	deleteSolution(newsolution);
+
+	/*for(int i = 0; i < 100; i++) {
+		pii** newsolution = mutation(solution, nRounds-1);
+		population.push_back(newsolution);
+		std::cout << cost(newsolution) << std::endl;
+	}*/
+	
 	deleteMatrix(games, nRounds);
+	deleteSolution(solution);
 }
 
 int main() {

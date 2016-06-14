@@ -152,7 +152,7 @@ pii** mutation(pii** solution, int mutationRate) {
 	return newsolution;
 }
 
-// Test feasibility for constraint 4:
+// Feasibility test for constraint (4):
 // No umpire is in a home site more than once in any n - d1 consecutive slots
 void feasibility4(pii** solution, int timewindow) {
 	int nRounds = problemData.nRounds;
@@ -177,7 +177,40 @@ void feasibility4(pii** solution, int timewindow) {
 
 	delete[] lastVisited;
 
-	std::cout << "nViolations = " << nViolations << std::endl;
+	std::cout << "nViolations (c4) = " << nViolations << std::endl;
+}
+
+// Feasibility test for constraint (5):
+// No umpire sees a team more than once in any n/2 - d2 consecutive slots.
+void feasibility5(pii** solution, int timewindow) {
+	int nRounds = problemData.nRounds;
+	int nTeams = problemData.nTeams;
+	int n = problemData.n;
+	int* lastSeen = new int[nTeams];
+	int team1, team2;
+	int nViolations = 0;
+
+	for(int u = 0; u < n; u++) {
+		for(int i = 0; i < nTeams; i++) {
+			lastSeen[i] = -1*timewindow;
+		}
+		for(int i = 0; i < nRounds; i++) {
+			team1 = solution[i][u].first;
+			team2 = solution[i][u].second;
+			if((i - lastSeen[team1] < timewindow)) {
+				nViolations = nViolations + 1;
+			}
+			if((i - lastSeen[team2] < timewindow)) {
+				nViolations = nViolations + 1;
+			}
+			lastSeen[team1] = i;
+			lastSeen[team2] = i;
+		}
+	}
+
+	delete[] lastSeen;
+
+	std::cout << "nViolations (c5) = " << nViolations << std::endl;
 }
 
 void loadData() {
@@ -276,9 +309,10 @@ void loadData() {
 	setProblemData(nTeams, nRounds, n, dist, opponents);
 	pii** newsolution = mutation(solution, nRounds);
 
-	printSolution(solution);
+	printSolution(newsolution);
 
-	feasibility4(solution, 4);
+	feasibility4(newsolution, 4);
+	feasibility5(newsolution, 2);
 
 	deleteSolution(newsolution);
 

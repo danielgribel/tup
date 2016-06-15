@@ -33,6 +33,7 @@ ProblemData problemData;
 const double MAX_LONG = std::numeric_limits<long>::max();
 const int timewindow4 = 4;
 const int timewindow5 = 2;
+const int penaltyRate = 1000;
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
@@ -348,7 +349,7 @@ void loadData() {
 	setProblemData(nTeams, nRounds, n, dist, opponents);
 }
 
-void crossover(pii** p1, pii** p2) {
+pii** crossover(pii** p1, pii** p2) {
 	int nRounds = problemData.nRounds;
 	int n = problemData.n;
 
@@ -371,10 +372,12 @@ void crossover(pii** p1, pii** p2) {
 		}
 	}
 
-	std::cout << crossPoint << std::endl;
-	printSolution(p1);
-	printSolution(p2);
-	printSolution(offspring);
+	return offspring;
+}
+
+long correctedCost(pii** solution) {
+	long ccost = cost(solution) + penaltyRate*totalViolations(solution);
+	return ccost;
 }
 
 void run() {
@@ -425,18 +428,50 @@ void run() {
 	}
 
 	std::vector< pii** > population;
-	const int penaltyRate = 100;
+	pii** bestSolution = solution;
+	pii** currSolution;
+	long bestCost = correctedCost(solution);
+	long ccost;
+	int it = 0;
+	std::cout << "f(" << it << ") = " << bestCost << std::endl;
 
-	for(int i = 0; i < 10; i++) {
+	for(int i = 0; i < 100; i++) {
 		pii** newsolution = mutation(solution, nRounds-1);
 		population.push_back(newsolution);
+		if(correctedCost(newsolution) < bestCost) {
+			bestCost = correctedCost(newsolution);
+			bestSolution = newsolution;
+		}
 	}
 
-	pii** p1 = tournamentSelection(population);
-	pii** p2 = tournamentSelection(population);
+	while(it < 1000) {
+		pii** p1 = tournamentSelection(population);
+		pii** p2 = tournamentSelection(population);
+		pii** offspring = crossover(p1, p2);	
+		pii** mutated = mutation(offspring, nRounds-1);
 
-	crossover(p1, p2);
+		population.push_back(offspring);
+		population.push_back(mutated);
 
+		if(correctedCost(offspring) < correctedCost(mutated)) {
+			ccost = correctedCost(offspring);
+			currSolution = offspring;
+		} else {
+			ccost = correctedCost(mutated);
+			currSolution = mutated;
+		}
+		if(ccost < bestCost) {
+			bestCost = ccost;
+			bestSolution = currSolution;
+		}
+
+		it++;
+		std::cout << "f(" << it << ") = "
+					<< bestCost << " "
+					<< cost(bestSolution) << " "
+					<< totalViolations(bestSolution) << std::endl;
+	}
+	
 	deleteMatrix(games, nRounds);
 	deleteSolution(solution);
 }

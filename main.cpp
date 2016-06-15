@@ -30,6 +30,10 @@ struct ProblemData {
 
 ProblemData problemData;
 
+const double MAX_LONG = std::numeric_limits<long>::max();
+const int timewindow4 = 4;
+const int timewindow5 = 2;
+
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
 }
@@ -63,12 +67,12 @@ void deleteSolution(pii** solution) {
     delete [] solution;
 }
 
-int cost(pii** solution) {
+long cost(pii** solution) {
 	int** dist = problemData.dist;
 	int nRounds = problemData.nRounds;
 	int n = problemData.n;
 
-	int cost = 0;
+	long cost = 0;
 
 	for(int i = 0; i < n; i++) {
 		for(int j = 0; j < nRounds-1; j++) {
@@ -87,12 +91,14 @@ void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents)
 }
 
 void printSolution(pii** solution) {
+	std::cout << "============================" << std::endl;
 	for(int i = 0; i < problemData.nRounds; i++) {
 		for(int j = 0; j < problemData.n; j++) {
 			std::cout << "(" << solution[i][j].first << ", " << solution[i][j].second << ") ";
 		}
 		std::cout << std::endl;
 	}
+	std::cout << "============================" << std::endl;
 }
 
 void shuffle(int* myArray, size_t n) {
@@ -154,7 +160,7 @@ pii** mutation(pii** solution, int mutationRate) {
 
 // Feasibility test for constraint (3):
 // Every umpire sees every team at least once at the team’s home
-void feasibility3(pii** solution) {
+int feasibility3(pii** solution) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
 	int n = problemData.n;
@@ -178,14 +184,16 @@ void feasibility3(pii** solution) {
 
 	nViolations = nTeams*n - contVenues;
 	
-	std::cout << "nViolations (c3) = " << nViolations << std::endl;
+	//std::cout << "nViolations (c3) = " << nViolations << std::endl;
 
 	delete[] homeVisited;
+
+	return nViolations;
 }
 
 // Feasibility test for constraint (4):
 // No umpire is in a home site more than once in any n - d1 consecutive slots
-void feasibility4(pii** solution, int timewindow) {
+int feasibility4(pii** solution) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
 	int n = problemData.n;
@@ -195,11 +203,11 @@ void feasibility4(pii** solution, int timewindow) {
 
 	for(int u = 0; u < n; u++) {
 		for(int i = 0; i < nTeams; i++) {
-			lastVisited[i] = -1*timewindow;
+			lastVisited[i] = -1*timewindow4;
 		}
 		for(int i = 0; i < nRounds; i++) {
 			venue = solution[i][u].first;
-			if(i - lastVisited[venue] < timewindow) {
+			if(i - lastVisited[venue] < timewindow4) {
 				nViolations = nViolations + 1;
 			}
 			lastVisited[venue] = i;
@@ -208,12 +216,14 @@ void feasibility4(pii** solution, int timewindow) {
 
 	delete[] lastVisited;
 
-	std::cout << "nViolations (c4) = " << nViolations << std::endl;
+	//std::cout << "nViolations (c4) = " << nViolations << std::endl;
+
+	return nViolations;
 }
 
 // Feasibility test for constraint (5):
 // No umpire sees a team more than once in any n/2 - d2 consecutive slots.
-void feasibility5(pii** solution, int timewindow) {
+int feasibility5(pii** solution) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
 	int n = problemData.n;
@@ -223,15 +233,15 @@ void feasibility5(pii** solution, int timewindow) {
 
 	for(int u = 0; u < n; u++) {
 		for(int i = 0; i < nTeams; i++) {
-			lastSeen[i] = -1*timewindow;
+			lastSeen[i] = -1*timewindow5;
 		}
 		for(int i = 0; i < nRounds; i++) {
 			team1 = solution[i][u].first;
 			team2 = solution[i][u].second;
-			if((i - lastSeen[team1] < timewindow)) {
+			if((i - lastSeen[team1] < timewindow5)) {
 				nViolations = nViolations + 1;
 			}
-			if((i - lastSeen[team2] < timewindow)) {
+			if((i - lastSeen[team2] < timewindow5)) {
 				nViolations = nViolations + 1;
 			}
 			lastSeen[team1] = i;
@@ -241,7 +251,47 @@ void feasibility5(pii** solution, int timewindow) {
 
 	delete[] lastSeen;
 
-	std::cout << "nViolations (c5) = " << nViolations << std::endl;
+	//std::cout << "nViolations (c5) = " << nViolations << std::endl;
+
+	return nViolations;
+}
+
+int totalViolations(pii** solution) {
+	int nViolations3 = feasibility3(solution);
+	int nViolations4 = feasibility4(solution);
+	int nViolations5 = feasibility5(solution);
+
+	return nViolations3 + nViolations4 + nViolations5;
+}
+
+pii** tournamentSelection(std::vector< pii** > population) {
+    pii** best = NULL;
+    int r1, r2;
+    int sizePopulation = population.size();
+    pii** s1 = population[rand() % sizePopulation];
+    pii** s2 = population[rand() % sizePopulation];
+
+    if(totalViolations(s1) == 0 && totalViolations(s2) == 0) {
+    	if(cost(s1) < cost(s2)) {
+    		best = s1;
+    	} else {
+    		best = s2;
+    	}
+    } else if(totalViolations(s1) > 0 && totalViolations(s2) > 0) {
+    	if(totalViolations(s1) < totalViolations(s2)) {
+    		best = s1;
+    	} else {
+    		best = s2;
+    	}
+    } else {
+    	if(totalViolations(s1) == 0) {
+    		best = s1;
+    	} else if(totalViolations(s2) == 0) {
+    		best = s2;
+    	}
+    }
+
+    return best;
 }
 
 void loadData() {
@@ -295,6 +345,44 @@ void loadData() {
 	    	}
 		}	
 	}
+	setProblemData(nTeams, nRounds, n, dist, opponents);
+}
+
+void crossover(pii** p1, pii** p2) {
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+
+	pii** offspring = new pii*[nRounds];
+	for(int i = 0; i < nRounds; i++) {
+		offspring[i] = new pii[n];
+	}
+	
+	int crossPoint = rand() % nRounds;
+
+	for(int i = 0; i < crossPoint; i++) {
+		for(int j = 0; j < n; j++) {
+			offspring[i][j] = p1[i][j];
+		}
+	}
+
+	for(int i = crossPoint; i < nRounds; i++) {
+		for(int j = 0; j < n; j++) {
+			offspring[i][j] = p2[i][j];
+		}
+	}
+
+	std::cout << crossPoint << std::endl;
+	printSolution(p1);
+	printSolution(p2);
+	printSolution(offspring);
+}
+
+void run() {
+	int nTeams = problemData.nTeams;
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+	int** dist = problemData.dist;
+	int** opponents = problemData.opponents;
 
 	pii** solution = new pii*[nRounds];
 	for(int i = 0; i < nRounds; i++) {
@@ -337,28 +425,25 @@ void loadData() {
 	}
 
 	std::vector< pii** > population;
-	setProblemData(nTeams, nRounds, n, dist, opponents);
-	pii** newsolution = mutation(solution, nRounds);
+	const int penaltyRate = 100;
 
-	printSolution(newsolution);
-
-	feasibility3(newsolution);
-	feasibility4(newsolution, 4);
-	feasibility5(newsolution, 2);
-
-	deleteSolution(newsolution);
-
-	/*for(int i = 0; i < 100; i++) {
+	for(int i = 0; i < 10; i++) {
 		pii** newsolution = mutation(solution, nRounds-1);
 		population.push_back(newsolution);
-		std::cout << cost(newsolution) << std::endl;
-	}*/
-	
+	}
+
+	pii** p1 = tournamentSelection(population);
+	pii** p2 = tournamentSelection(population);
+
+	crossover(p1, p2);
+
 	deleteMatrix(games, nRounds);
 	deleteSolution(solution);
 }
 
 int main() {
+	srand(1607);
 	loadData();
+	run();
 	return 0;
 }

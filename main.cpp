@@ -1,8 +1,5 @@
 #include "min_cost_assignment.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <iostream>
+#include "Solution.h"
 #include <sstream>
 #include <fstream>
 #include <cmath>
@@ -19,22 +16,9 @@
 #include <cctype>
 #include <locale>
 
-#define pii std::pair<int, int>
-
-struct ProblemData {
-	int nTeams;
-	int nRounds;
-	int n;
-	int** dist;
-	int** opponents;	
-};
-
 ProblemData problemData;
 
 const double MAX_LONG = std::numeric_limits<long>::max();
-const int timewindow4 = 4;
-const int timewindow5 = 2;
-const int penaltyRate = 1000;
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
@@ -84,12 +68,17 @@ long cost(pii** solution) {
 	return cost;
 }
 
-void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents) {
+void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents, 
+	int timewindow4, int timewindow5, long penaltyRate) {
+	
 	problemData.nTeams = nTeams;
 	problemData.nRounds = nRounds;
 	problemData.n = n;
 	problemData.dist = dist;
 	problemData.opponents = opponents;
+	problemData.timewindow4 = timewindow4;
+	problemData.timewindow5 = timewindow5;
+	problemData.penaltyRate = penaltyRate;
 }
 
 void printSolution(pii** solution) {
@@ -118,7 +107,6 @@ void shuffle(int* myArray, size_t n) {
         }
     }
 }
-
 
 // mutation
 // 1 <= mutateRate <= nRounds
@@ -161,39 +149,6 @@ pii** mutation(pii** solution, int mutationRate) {
 	return newsolution;
 }
 
-// Feasibility test for constraint (3):
-// Every umpire sees every team at least once at the team’s home
-int feasibility3(pii** solution) {
-	int nRounds = problemData.nRounds;
-	int nTeams = problemData.nTeams;
-	int n = problemData.n;
-	int* homeVisited = new int[nTeams];
-	int venue;
-	int contVenues = 0;
-	int nViolations = 0;
-
-	for(int u = 0; u < n; u++) {
-		for(int i = 0; i < nTeams; i++) {
-			homeVisited[i] = 0;
-		}
-		for(int i = 0; i < nRounds; i++) {
-			venue = solution[i][u].first;
-			if(homeVisited[venue] == 0) {
-				homeVisited[venue] = 1;
-				contVenues = contVenues + 1;
-			}
-		}
-	}
-
-	nViolations = nTeams*n - contVenues;
-	
-	//std::cout << "nViolations (c3) = " << nViolations << std::endl;
-
-	delete[] homeVisited;
-
-	return nViolations;
-}
-
 int uFeasibility3(pii** solution, int u, int s, int crossPoint) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
@@ -222,39 +177,7 @@ int uFeasibility3(pii** solution, int u, int s, int crossPoint) {
 
 	nViolations = nTeams - contVenues;
 	
-	//std::cout << "nViolations (c3) = " << nViolations << std::endl;
-
 	delete[] homeVisited;
-
-	return nViolations;
-}
-
-// Feasibility test for constraint (4):
-// No umpire is in a home site more than once in any n - d1 consecutive slots
-int feasibility4(pii** solution) {
-	int nRounds = problemData.nRounds;
-	int nTeams = problemData.nTeams;
-	int n = problemData.n;
-	int* lastVisited = new int[nTeams];
-	int venue;
-	int nViolations = 0;
-
-	for(int u = 0; u < n; u++) {
-		for(int i = 0; i < nTeams; i++) {
-			lastVisited[i] = -1*timewindow4;
-		}
-		for(int i = 0; i < nRounds; i++) {
-			venue = solution[i][u].first;
-			if(i - lastVisited[venue] < timewindow4) {
-				nViolations = nViolations + 1;
-			}
-			lastVisited[venue] = i;
-		}
-	}
-
-	delete[] lastVisited;
-
-	//std::cout << "nViolations (c4) = " << nViolations << std::endl;
 
 	return nViolations;
 }
@@ -267,61 +190,24 @@ int uFeasibility4(pii** solution, int u, int s, int crossPoint) {
 	int nViolations = 0;
 
 	for(int i = 0; i < nTeams; i++) {
-		lastVisited[i] = -1*timewindow4;
+		lastVisited[i] = -1*problemData.timewindow4;
 	}
 	for(int i = 0; i < crossPoint; i++) {
 		venue = solution[i][u].first;
-		if(i - lastVisited[venue] < timewindow4) {
+		if(i - lastVisited[venue] < problemData.timewindow4) {
 			nViolations = nViolations + 1;
 		}
 		lastVisited[venue] = i;
 	}
 	for(int i = crossPoint; i < nRounds; i++) {
 		venue = solution[i][s].first;
-		if(i - lastVisited[venue] < timewindow4) {
+		if(i - lastVisited[venue] < problemData.timewindow4) {
 			nViolations = nViolations + 1;
 		}
 		lastVisited[venue] = i;
 	}
 
 	delete[] lastVisited;
-
-	//std::cout << "nViolations (c4) = " << nViolations << std::endl;
-
-	return nViolations;
-}
-
-// Feasibility test for constraint (5):
-// No umpire sees a team more than once in any n/2 - d2 consecutive slots.
-int feasibility5(pii** solution) {
-	int nRounds = problemData.nRounds;
-	int nTeams = problemData.nTeams;
-	int n = problemData.n;
-	int* lastSeen = new int[nTeams];
-	int team1, team2;
-	int nViolations = 0;
-
-	for(int u = 0; u < n; u++) {
-		for(int i = 0; i < nTeams; i++) {
-			lastSeen[i] = -1*timewindow5;
-		}
-		for(int i = 0; i < nRounds; i++) {
-			team1 = solution[i][u].first;
-			team2 = solution[i][u].second;
-			if((i - lastSeen[team1] < timewindow5)) {
-				nViolations = nViolations + 1;
-			}
-			if((i - lastSeen[team2] < timewindow5)) {
-				nViolations = nViolations + 1;
-			}
-			lastSeen[team1] = i;
-			lastSeen[team2] = i;
-		}
-	}
-
-	delete[] lastSeen;
-
-	//std::cout << "nViolations (c5) = " << nViolations << std::endl;
 
 	return nViolations;
 }
@@ -334,15 +220,15 @@ int uFeasibility5(pii** solution, int u, int s, int crossPoint) {
 	int nViolations = 0;
 
 	for(int i = 0; i < nTeams; i++) {
-		lastSeen[i] = -1*timewindow5;
+		lastSeen[i] = -1*problemData.timewindow5;
 	}
 	for(int i = 0; i < crossPoint; i++) {
 		team1 = solution[i][u].first;
 		team2 = solution[i][u].second;
-		if((i - lastSeen[team1] < timewindow5)) {
+		if((i - lastSeen[team1] < problemData.timewindow5)) {
 			nViolations = nViolations + 1;
 		}
-		if((i - lastSeen[team2] < timewindow5)) {
+		if((i - lastSeen[team2] < problemData.timewindow5)) {
 			nViolations = nViolations + 1;
 		}
 		lastSeen[team1] = i;
@@ -351,10 +237,10 @@ int uFeasibility5(pii** solution, int u, int s, int crossPoint) {
 	for(int i = crossPoint; i < nRounds; i++) {
 		team1 = solution[i][s].first;
 		team2 = solution[i][s].second;
-		if((i - lastSeen[team1] < timewindow5)) {
+		if((i - lastSeen[team1] < problemData.timewindow5)) {
 			nViolations = nViolations + 1;
 		}
-		if((i - lastSeen[team2] < timewindow5)) {
+		if((i - lastSeen[team2] < problemData.timewindow5)) {
 			nViolations = nViolations + 1;
 		}
 		lastSeen[team1] = i;
@@ -363,43 +249,33 @@ int uFeasibility5(pii** solution, int u, int s, int crossPoint) {
 
 	delete[] lastSeen;
 
-	//std::cout << "nViolations (c5) = " << nViolations << std::endl;
-
 	return nViolations;
 }
 
-int totalViolations(pii** solution) {
-	int nViolations3 = feasibility3(solution);
-	int nViolations4 = feasibility4(solution);
-	int nViolations5 = feasibility5(solution);
-
-	return nViolations3 + nViolations4 + nViolations5;
-}
-
-pii** tournamentSelection(std::vector< pii** > population) {
+pii** tournamentSelection(std::vector< Solution* > population) {
     pii** best = NULL;
     int r1, r2;
     int sizePopulation = population.size();
-    pii** s1 = population[rand() % sizePopulation];
-    pii** s2 = population[rand() % sizePopulation];
+    Solution* s1 = population[rand() % sizePopulation];
+    Solution* s2 = population[rand() % sizePopulation];
 
-    if(totalViolations(s1) == 0 && totalViolations(s2) == 0) {
-    	if(cost(s1) < cost(s2)) {
-    		best = s1;
+    if(s1->getTotalViolations() == 0 && s2->getTotalViolations() == 0) {
+    	if(s1->getCost() < s1->getCost()) {
+    		best = s1->getScheduling();
     	} else {
-    		best = s2;
+    		best = s2->getScheduling();
     	}
-    } else if(totalViolations(s1) > 0 && totalViolations(s2) > 0) {
-    	if(totalViolations(s1) < totalViolations(s2)) {
-    		best = s1;
+    } else if(s1->getTotalViolations() > 0 && s2->getTotalViolations() > 0) {
+    	if(s1->getTotalViolations() < s2->getTotalViolations()) {
+    		best = s1->getScheduling();
     	} else {
-    		best = s2;
+    		best = s2->getScheduling();
     	}
     } else {
-    	if(totalViolations(s1) == 0) {
-    		best = s1;
-    	} else if(totalViolations(s2) == 0) {
-    		best = s2;
+    	if(s1->getTotalViolations() == 0) {
+    		best = s1->getScheduling();
+    	} else if(s2->getTotalViolations() == 0) {
+    		best = s2->getScheduling();
     	}
     }
 
@@ -457,10 +333,10 @@ void loadData() {
 	    	}
 		}	
 	}
-	setProblemData(nTeams, nRounds, n, dist, opponents);
+	setProblemData(nTeams, nRounds, n, dist, opponents, 4, 2, 100000);
 }
 
-void match(pii** solution, int crossPoint) {
+std::vector<long> match(pii** solution, int crossPoint) {
 	const int n = problemData.n;
 	const int nRounds = problemData.nRounds;
 	int** dist = problemData.dist;
@@ -474,24 +350,23 @@ void match(pii** solution, int crossPoint) {
 	for(int u = 0; u < n; u++) {
 		for(int s = 0; s < n; s++) {
 			matchingMatrix[u][s] = 1.0*(dist[solution[crossPoint-1][u].first][solution[crossPoint][s].first]
-									+ penaltyRate*(	  uFeasibility3(solution, u, s, crossPoint) 
+									+ problemData.penaltyRate*(	  uFeasibility3(solution, u, s, crossPoint) 
 													+ uFeasibility4(solution, u, s, crossPoint)
 													+ uFeasibility5(solution, u, s, crossPoint)
 									));
-			std::cout << matchingMatrix[u][s] << " ";
+			//std::cout << matchingMatrix[u][s] << " ";
 			/*std::cout << "edgeCost(" << u << ", " << s << ") = " << dist[solution[crossPoint-1][u].first][solution[crossPoint][s].first] << std::endl;
 			std::cout << "uFeasibility3(" << u << ", " << s << ") = " << uFeasibility3(solution, u, s, crossPoint) << std::endl;
 			std::cout << "uFeasibility4(" << u << ", " << s << ") = " << uFeasibility4(solution, u, s, crossPoint) << std::endl;
 			std::cout << "uFeasibility5(" << u << ", " << s << ") = " << uFeasibility5(solution, u, s, crossPoint) << std::endl;
 			std::cout << "=====================================" << std::endl;*/
 		}
-		std::cout << std::endl;
+		//std::cout << std::endl;
 	}
 
 	std::vector<long> matching = minAssignment(matchingMatrix, n);
-	for(int i = 0; i < n; i++) {
-		std::cout << matching[i] << " ";
-	} std::cout << std::endl;
+	
+	return matching;
 }
 
 pii** crossover(pii** p1, pii** p2) {
@@ -517,14 +392,34 @@ pii** crossover(pii** p1, pii** p2) {
 		}
 	}
 
-	match(offspring, crossPoint);
+	std::vector<long> matching = match(offspring, crossPoint);
 
-	return offspring;
-}
+	//for(int i = 0; i < n; i++) {
+	//	std::cout << matching[i] << " ";
+	//} std::cout << std::endl;
 
-long correctedCost(pii** solution) {
-	long ccost = cost(solution) + penaltyRate*totalViolations(solution);
-	return ccost;
+	pii** offspringMatching = new pii*[nRounds];
+	for(int i = 0; i < nRounds; i++) {
+		offspringMatching[i] = new pii[n];
+	}
+
+	for(int i = 0; i < crossPoint; i++) {
+		for(int j = 0; j < n; j++) {
+			offspringMatching[i][j] = p1[i][j];
+		}
+	}
+
+	int s;
+	for(int i = crossPoint; i < nRounds; i++) {
+		for(int j = 0; j < n; j++) {
+			s = matching[j];
+			offspringMatching[i][j] = p2[i][s];
+		}
+	}
+
+	deleteSolution(offspring);
+
+	return offspringMatching;
 }
 
 void run() {
@@ -534,9 +429,9 @@ void run() {
 	int** dist = problemData.dist;
 	int** opponents = problemData.opponents;
 
-	pii** solution = new pii*[nRounds];
+	pii** scheduling = new pii*[nRounds];
 	for(int i = 0; i < nRounds; i++) {
-		solution[i] = new pii[n];
+		scheduling[i] = new pii[n];
 	}
 
 	int** games = new int*[nRounds];
@@ -561,71 +456,79 @@ void run() {
 				if(opponents[i][j] > 0) {
 					signal = 1;
 					games[i][signal*opponents[i][j]-1] = c;
-					solution[i][c].first = j;
-					solution[i][c].second = signal*opponents[i][j]-1;
+					scheduling[i][c].first = j;
+					scheduling[i][c].second = signal*opponents[i][j]-1;
 				} else {
 					signal = -1;
 					games[i][signal*opponents[i][j]-1] = c;
-					solution[i][c].first = signal*opponents[i][j]-1;
-					solution[i][c].second = j;
+					scheduling[i][c].first = signal*opponents[i][j]-1;
+					scheduling[i][c].second = j;
 				}
 				c++;
 			}
 		}
 	}
 
-	std::vector< pii** > population;
-	pii** bestSolution = solution;
-	pii** currSolution;
-	long bestCost = correctedCost(solution);
+	std::vector<Solution*> population;
+	Solution* solution = new Solution(scheduling, problemData);
+	Solution* bestSolution = solution;
+	long bestCost = solution->getCorrectedCost();
+	Solution* currSolution;
 	long ccost;
 	int it = 0;
-	std::cout << "f(" << it << ") = " << bestCost << std::endl;
+	std::cout << "f(" << it << ") = " << bestSolution->getCorrectedCost() << std::endl;
 
 	for(int i = 0; i < 100; i++) {
-		pii** newsolution = mutation(solution, nRounds-1);
-		population.push_back(newsolution);
-		if(correctedCost(newsolution) < bestCost) {
-			bestCost = correctedCost(newsolution);
-			bestSolution = newsolution;
+		pii** newScheduling = mutation(solution->getScheduling(), nRounds-1);
+		Solution* newSolution = new Solution(newScheduling, problemData);
+		population.push_back(newSolution);
+		if(newSolution->getCorrectedCost() < bestSolution->getCorrectedCost()) {
+			bestSolution = newSolution;
 		}
 	}
 
-	while(it < 1) {
+	while(it < 10000) {
 		pii** p1 = tournamentSelection(population);
 		pii** p2 = tournamentSelection(population);
 		pii** offspring = crossover(p1, p2);	
-		pii** mutated = mutation(offspring, nRounds-1);
+		pii** mutated = mutation(offspring, 2);
 
-		population.push_back(offspring);
-		population.push_back(mutated);
+		Solution* offspringSolution = new Solution(offspring, problemData);
+		Solution* mutatedSolution = new Solution(mutated, problemData);
 
-		if(correctedCost(offspring) < correctedCost(mutated)) {
-			ccost = correctedCost(offspring);
-			currSolution = offspring;
+		population.push_back(offspringSolution);
+		population.push_back(mutatedSolution);
+
+		if(offspringSolution->getCorrectedCost() < mutatedSolution->getCorrectedCost()) {
+			ccost = offspringSolution->getCorrectedCost();
+			currSolution = offspringSolution;
 		} else {
-			ccost = correctedCost(mutated);
-			currSolution = mutated;
+			ccost = mutatedSolution->getCorrectedCost();
+			currSolution = mutatedSolution;
 		}
-		if(ccost < bestCost) {
-			bestCost = ccost;
+		if(ccost < bestSolution->getCorrectedCost()) {
 			bestSolution = currSolution;
 		}
 
 		it++;
 		std::cout << "f(" << it << ") = "
-					<< bestCost << " "
-					<< cost(bestSolution) << " "
-					<< totalViolations(bestSolution) << std::endl;
+					<< bestSolution->getCorrectedCost() << " "
+					<< bestSolution->getCost() << " "
+					<< bestSolution->getTotalViolations() << std::endl;
 	}
 	
 	deleteMatrix(games, nRounds);
-	deleteSolution(solution);
+	deleteSolution(scheduling);
 }
 
 int main() {
 	srand(0);
 	loadData();
+	
+	clock_t begin = clock();
 	run();
+	double elapsedSecs = double(clock() - begin) / CLOCKS_PER_SEC;
+	printf("t = %.5f\n", elapsedSecs);    
+	
 	return 0;
 }

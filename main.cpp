@@ -1,3 +1,4 @@
+#include "min_cost_assignment.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -463,20 +464,20 @@ void match(pii** solution, int crossPoint) {
 	const int n = problemData.n;
 	const int nRounds = problemData.nRounds;
 	int** dist = problemData.dist;
-	int** matchingMatrix = new int*[n];
+	double** matchingMatrix = new double*[n];
 	for(int i = 0; i < n; i++) {
-		matchingMatrix[i] = new int[n];
+		matchingMatrix[i] = new double[n];
 	}
 
 	//std::cout << "crossPoint = " << crossPoint << std::endl;
 
 	for(int u = 0; u < n; u++) {
 		for(int s = 0; s < n; s++) {
-			matchingMatrix[u][s] = dist[solution[crossPoint-1][u].first][solution[crossPoint][s].first]
+			matchingMatrix[u][s] = 1.0*(dist[solution[crossPoint-1][u].first][solution[crossPoint][s].first]
 									+ penaltyRate*(	  uFeasibility3(solution, u, s, crossPoint) 
 													+ uFeasibility4(solution, u, s, crossPoint)
 													+ uFeasibility5(solution, u, s, crossPoint)
-									);
+									));
 			std::cout << matchingMatrix[u][s] << " ";
 			/*std::cout << "edgeCost(" << u << ", " << s << ") = " << dist[solution[crossPoint-1][u].first][solution[crossPoint][s].first] << std::endl;
 			std::cout << "uFeasibility3(" << u << ", " << s << ") = " << uFeasibility3(solution, u, s, crossPoint) << std::endl;
@@ -486,6 +487,11 @@ void match(pii** solution, int crossPoint) {
 		}
 		std::cout << std::endl;
 	}
+
+	std::vector<long> matching = minAssignment(matchingMatrix, n);
+	for(int i = 0; i < n; i++) {
+		std::cout << matching[i] << " ";
+	} std::cout << std::endl;
 }
 
 pii** crossover(pii** p1, pii** p2) {

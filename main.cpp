@@ -288,7 +288,7 @@ pii** tournamentSelection(std::vector< Solution* > population) {
 }
 
 void loadData() {
-	std::ifstream file("data/umps10B.txt");
+	std::ifstream file("data/umps10.txt");
 	std::string str;
 	std::vector<std::string> fileContents;
 	
@@ -494,6 +494,53 @@ std::vector<Solution*> selectSurvivors(HeapPdi* costHeap, std::vector<Solution*>
     return newPopulation;
 }
 
+std::vector<Solution*> getRandomPopulation(std::vector<Solution*> elitePopulation, int numNew) {
+	std::vector<Solution*> randomPopulation;
+	int j = 0;
+	for(int i = 0; i < numNew; i++) {
+		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds);
+		Solution* mutatedSolution = new Solution(mutated, problemData);
+		randomPopulation.push_back(mutatedSolution);
+		/*j++;
+		if(j == elitePopulation.size()) {
+			j = 0;
+		}*/
+	}
+	return randomPopulation;
+}
+
+std::vector<Solution*> diversifyPopulation(
+	HeapPdi* costHeap, std::vector<Solution*> population, const int numKeep, const int numNew) {
+
+    std::vector<Solution*> newPopulation;
+    long cost;
+    int id;
+
+    HeapPdi* costHeapAux = new HeapPdi();
+
+    for(int i = 0; i < numKeep; i++) {
+        cost = costHeap->front_min().first;
+        id = costHeap->front_min().second;
+        costHeapAux->push_min(cost, i);
+        costHeap->pop_min();
+        newPopulation.push_back(population[id]);
+    }
+
+    std::vector<Solution*> randomIndividuals = getRandomPopulation(newPopulation, numNew);
+
+    for(int i = 0; i < randomIndividuals.size(); i++) {
+        newPopulation.push_back(randomIndividuals[i]);
+        cost = randomIndividuals[i]->getCorrectedCost();
+        costHeapAux->push_min(cost, numKeep+i);
+    }
+
+    costHeap->setHeap(costHeapAux->getHeap());
+
+    delete costHeapAux;
+
+    return newPopulation;
+}
+
 void run() {
 	int nTeams = problemData.nTeams;
 	int nRounds = problemData.nRounds;
@@ -501,8 +548,15 @@ void run() {
 	int** dist = problemData.dist;
 	int** opponents = problemData.opponents;
 
-	const int maxPopulation = 1500;
-	const int sizePopulation = 400;
+	const int maxPopulation = 1200;
+	const int sizePopulation = 200;
+	const int maxIt = 200000;
+	const int itNoImp = 80000;
+	const int itDiv = 10000;
+	const int numKeep = sizePopulation;
+	const int numNew = 2*sizePopulation;
+	int lastImprovement = 0;
+    int lastDiv = 0;
 	
 	HeapPdi* costHeap = new HeapPdi();
 
@@ -556,7 +610,7 @@ void run() {
 	std::cout << "f(" << it << ") = " << bestSolution->getCorrectedCost() << std::endl;
 
 	for(int i = 0; i < 1000; i++) {
-		pii** newScheduling = mutation(solution->getScheduling(), nRounds-1);
+		pii** newScheduling = mutation(solution->getScheduling(), nRounds);
 		Solution* newSolution = new Solution(newScheduling, problemData);
 		population.push_back(newSolution);
 		costHeap->push_min(newSolution->getCorrectedCost(), i);
@@ -565,7 +619,7 @@ void run() {
 		}
 	}
 
-	while(it < 100000) {
+	while((it-lastImprovement < itNoImp) && (it < maxIt)) {
 		pii** p1 = tournamentSelection(population);
 		pii** p2 = tournamentSelection(population);
 		pii** offspring = crossover(p1, p2);	
@@ -573,6 +627,8 @@ void run() {
 
 		Solution* offspringSolution = new Solution(offspring, problemData);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
+
+		// local search ?
 
 		population.push_back(offspringSolution);
 		costHeap->push_min(offspringSolution->getCorrectedCost(), population.size() - 1);
@@ -589,10 +645,20 @@ void run() {
 		}
 		if(ccost < bestSolution->getCorrectedCost()) {
 			bestSolution = currSolution;
+			lastImprovement = it;
 		}
 
 		if(population.size() > maxPopulation) {
             population = selectSurvivors(costHeap, population, sizePopulation);
+        }
+
+        if( ((it-lastImprovement) >= itDiv) && ((it-lastDiv) >= itDiv) ) {
+            lastDiv = it;
+            population = diversifyPopulation(costHeap, population, numKeep, numNew);
+            if(costHeap->front_min().first < bestSolution->getCorrectedCost()) {
+                lastImprovement = it;
+                bestSolution = population[costHeap->front_min().second];
+            }
         }
 
 		it++;

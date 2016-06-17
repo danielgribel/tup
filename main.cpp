@@ -1,5 +1,7 @@
 #include "min_cost_assignment.h"
 #include "Solution.h"
+#include "Heap.h"
+#include "HashTable.h"
 #include <sstream>
 #include <fstream>
 #include <cmath>
@@ -16,15 +18,18 @@
 #include <cctype>
 #include <locale>
 
-ProblemData problemData;
-
 const double MAX_LONG = std::numeric_limits<long>::max();
+
+ProblemData problemData;
+const int penaltyRate = 100000;
+const int d4 = 5; // d4 = n - d1
+const int d5 = 2; // d5 = \floor(n/2) - d2 (rounding n/2 down)
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
 }
 
-std::string strip( const std::string &s ) {
+std::string strip(const std::string &s) {
     std::string result;
     result.reserve( s.length() );
 
@@ -283,7 +288,7 @@ pii** tournamentSelection(std::vector< Solution* > population) {
 }
 
 void loadData() {
-	std::ifstream file("data/umps8.txt");
+	std::ifstream file("data/umps10B.txt");
 	std::string str;
 	std::vector<std::string> fileContents;
 	
@@ -333,7 +338,7 @@ void loadData() {
 	    	}
 		}	
 	}
-	setProblemData(nTeams, nRounds, n, dist, opponents, 4, 2, 100000);
+	setProblemData(nTeams, nRounds, n, dist, opponents, d4, d5, penaltyRate);
 }
 
 std::vector<long> match(pii** solution, int crossPoint) {
@@ -422,12 +427,84 @@ pii** crossover(pii** p1, pii** p2) {
 	return offspringMatching;
 }
 
+std::vector<Solution*> selectSurvivors(HeapPdi* costHeap, std::vector<Solution*> population, int sizePopulation) {
+
+    HashTable* table = new HashTable();
+    HeapPdi* heapInd = new HeapPdi();
+    HeapPdi* heapClones = new HeapPdi();
+
+    const int maxPopulation = population.size();
+    std::vector<Solution*> newPopulation;
+    int* discarded = new int[maxPopulation];
+    int id;
+
+    for(int i = 0; i < maxPopulation; i++) {
+        Solution* solution = population[i];
+        Item * anItem = new Item;
+        (*anItem).cost = solution->getCorrectedCost();
+        (*anItem).nbViolations3 = solution->getNbViolations3();
+        (*anItem).nbViolations4 = solution->getNbViolations4();
+        (*anItem).nbViolations5 = solution->getNbViolations5();
+        (*anItem).next = NULL;
+
+        if(table->existItem(anItem)) {
+            heapClones->push_max(solution->getCorrectedCost(), i);
+        } else {
+            table->insertItem(anItem);
+            heapInd->push_max(solution->getCorrectedCost(), i);
+        }
+        discarded[i] = 0;
+    }
+    int j = 0;
+    
+    while((j < (maxPopulation-sizePopulation)) && (heapClones->getHeap().size() > 0)) {
+        id = heapClones->front_max().second;
+        heapClones->pop_max();
+        discarded[id] = 1;
+        j++;
+    }
+
+    while(j < (maxPopulation-sizePopulation)) {
+        id = heapInd->front_max().second;
+        heapInd->pop_max();
+        discarded[id] = 1;
+        j++;
+    }
+
+    HeapPdi* costHeapAux = new HeapPdi();
+    int l = 0;
+
+    for(int i = 0; i < maxPopulation; i++) {
+        if(discarded[i] == 0) {
+            newPopulation.push_back(population[i]);
+            costHeapAux->push_min(population[i]->getCorrectedCost(), l);
+            l++;
+        } else {
+            delete population[i];
+        }
+    }
+    costHeap->setHeap(costHeapAux->getHeap());
+
+    delete heapInd;
+    delete heapClones;
+    delete costHeapAux;
+    delete [] discarded;
+    delete table;
+
+    return newPopulation;
+}
+
 void run() {
 	int nTeams = problemData.nTeams;
 	int nRounds = problemData.nRounds;
 	int n = problemData.n;
 	int** dist = problemData.dist;
 	int** opponents = problemData.opponents;
+
+	const int maxPopulation = 1500;
+	const int sizePopulation = 400;
+	
+	HeapPdi* costHeap = new HeapPdi();
 
 	pii** scheduling = new pii*[nRounds];
 	for(int i = 0; i < nRounds; i++) {
@@ -478,16 +555,17 @@ void run() {
 	int it = 0;
 	std::cout << "f(" << it << ") = " << bestSolution->getCorrectedCost() << std::endl;
 
-	for(int i = 0; i < 100; i++) {
+	for(int i = 0; i < 1000; i++) {
 		pii** newScheduling = mutation(solution->getScheduling(), nRounds-1);
 		Solution* newSolution = new Solution(newScheduling, problemData);
 		population.push_back(newSolution);
+		costHeap->push_min(newSolution->getCorrectedCost(), i);
 		if(newSolution->getCorrectedCost() < bestSolution->getCorrectedCost()) {
 			bestSolution = newSolution;
 		}
 	}
 
-	while(it < 10000) {
+	while(it < 100000) {
 		pii** p1 = tournamentSelection(population);
 		pii** p2 = tournamentSelection(population);
 		pii** offspring = crossover(p1, p2);	
@@ -497,7 +575,10 @@ void run() {
 		Solution* mutatedSolution = new Solution(mutated, problemData);
 
 		population.push_back(offspringSolution);
+		costHeap->push_min(offspringSolution->getCorrectedCost(), population.size() - 1);
+
 		population.push_back(mutatedSolution);
+		costHeap->push_min(mutatedSolution->getCorrectedCost(), population.size() - 1);
 
 		if(offspringSolution->getCorrectedCost() < mutatedSolution->getCorrectedCost()) {
 			ccost = offspringSolution->getCorrectedCost();
@@ -510,6 +591,10 @@ void run() {
 			bestSolution = currSolution;
 		}
 
+		if(population.size() > maxPopulation) {
+            population = selectSurvivors(costHeap, population, sizePopulation);
+        }
+
 		it++;
 		std::cout << "f(" << it << ") = "
 					<< bestSolution->getCorrectedCost() << " "
@@ -517,6 +602,7 @@ void run() {
 					<< bestSolution->getTotalViolations() << std::endl;
 	}
 	
+	delete costHeap;
 	deleteMatrix(games, nRounds);
 	deleteSolution(scheduling);
 }

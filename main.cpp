@@ -21,9 +21,12 @@
 const double MAX_LONG = std::numeric_limits<long>::max();
 
 ProblemData problemData;
+const string inputFile = "data/umps14.txt";
 const int penaltyRate = 100000;
-const int d4 = 5; // d4 = n - d1
-const int d5 = 2; // d5 = \floor(n/2) - d2 (rounding n/2 down)
+const int d4 = 6; // d4 = n - d1
+const int d5 = 3; // d5 = \floor(n/2) - d2 (rounding n/2 down)
+
+Solution* localSearch(Solution* solution);
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
@@ -44,6 +47,13 @@ std::string strip(const std::string &s) {
 bool bothAreSpaces(char lhs, char rhs) { return (lhs == rhs) && (lhs == ' '); }
 
 void deleteMatrix(int** matrix, int n) {
+	for(int i = 0; i < n; i++) {
+        delete [] matrix[i];
+    }
+    delete [] matrix;
+}
+
+void deleteMatrix(double** matrix, int n) {
 	for(int i = 0; i < n; i++) {
         delete [] matrix[i];
     }
@@ -288,7 +298,7 @@ pii** tournamentSelection(std::vector< Solution* > population) {
 }
 
 void loadData() {
-	std::ifstream file("data/umps10.txt");
+	std::ifstream file(inputFile.c_str());
 	std::string str;
 	std::vector<std::string> fileContents;
 	
@@ -370,6 +380,8 @@ std::vector<long> match(pii** solution, int crossPoint) {
 	}
 
 	std::vector<long> matching = minAssignment(matchingMatrix, n);
+
+	deleteMatrix(matchingMatrix, n);
 	
 	return matching;
 }
@@ -500,9 +512,10 @@ std::vector<Solution*> getRandomPopulation(std::vector<Solution*> elitePopulatio
 	for(int i = 0; i < numNew; i++) {
 		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
+		//mutatedSolution = localSearch(mutatedSolution);
 		randomPopulation.push_back(mutatedSolution);
 		/*j++;
-		if(j == elitePopulation.size()) {
+		if(j >= 0.5*elitePopulation.size()) {
 			j = 0;
 		}*/
 	}
@@ -539,6 +552,57 @@ std::vector<Solution*> diversifyPopulation(
     delete costHeapAux;
 
     return newPopulation;
+}
+
+Solution* localSearch(Solution* solution) {
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+	int crossPoint;
+	int* shRounds = new int[nRounds-1];
+	bool improving = true;
+	
+	while(improving) {
+		shuffle(shRounds, nRounds-1);
+		improving = false;
+		for(int i = 0; i < nRounds-1; i++) {
+			crossPoint = shRounds[i]+1;
+			std::vector<long> matching = match(solution->getScheduling(), crossPoint);
+
+			pii** offspringMatching = new pii*[nRounds];
+			for(int i = 0; i < nRounds; i++) {
+				offspringMatching[i] = new pii[n];
+			}
+
+			for(int i = 0; i < crossPoint; i++) {
+				for(int j = 0; j < n; j++) {
+					offspringMatching[i][j] = solution->getScheduling()[i][j];
+				}
+			}
+
+			int s;
+			for(int i = crossPoint; i < nRounds; i++) {
+				for(int j = 0; j < n; j++) {
+					s = matching[j];
+					offspringMatching[i][j] = solution->getScheduling()[i][s];
+				}
+			}
+
+			Solution* newSolution = new Solution(offspringMatching, problemData);
+			
+			if(newSolution->getCorrectedCost() < solution->getCorrectedCost()) {
+				delete solution;
+				solution = NULL;
+				solution = newSolution;
+				improving = true;
+			} else {
+				delete newSolution;
+			}
+		}	
+	}
+	
+	delete [] shRounds;
+
+	return solution;
 }
 
 void run() {
@@ -628,7 +692,7 @@ void run() {
 		Solution* offspringSolution = new Solution(offspring, problemData);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
 
-		// local search ?
+		offspringSolution = localSearch(offspringSolution);
 
 		population.push_back(offspringSolution);
 		costHeap->push_min(offspringSolution->getCorrectedCost(), population.size() - 1);
@@ -665,8 +729,11 @@ void run() {
 		std::cout << "f(" << it << ") = "
 					<< bestSolution->getCorrectedCost() << " "
 					<< bestSolution->getCost() << " "
-					<< bestSolution->getTotalViolations() << std::endl;
+					<< bestSolution->getTotalViolations() << " "
+					<< lastImprovement << std::endl;
 	}
+
+	printSolution(bestSolution->getScheduling());
 	
 	delete costHeap;
 	deleteMatrix(games, nRounds);

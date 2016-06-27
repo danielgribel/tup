@@ -24,7 +24,7 @@ class Solution {
         void calculateNbViolations4();
         void calculateNbViolations5();
 
-    public:        
+    public:
         Solution(pii** scheduling, ProblemData problemData);
         ~Solution();
         pii** getScheduling();
@@ -34,6 +34,11 @@ class Solution {
         int getNbViolations4();
         int getNbViolations5();
         int getTotalViolations();
+        long umpireCostDelta(int u, int v, int s);
+        int umpireConst3Delta(int u, int v, int s);
+        int umpireConst4Delta(int u, int v, int s);
+        int umpireConst5Delta(int u, int v, int s);
+        void swap(int u, int v, int s);
 };
 
 #endif

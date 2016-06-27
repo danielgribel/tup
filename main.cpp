@@ -21,12 +21,13 @@
 const double MAX_LONG = std::numeric_limits<long>::max();
 
 ProblemData problemData;
-const string inputFile = "data/umps14.txt";
+const string inputFile = "data/umps16.txt";
 const int penaltyRate = 100000;
-const int d4 = 6; // d4 = n - d1
-const int d5 = 3; // d5 = \floor(n/2) - d2 (rounding n/2 down)
+const int d4 = 7; // d4 = n - d1
+const int d5 = 4; // d5 = \floor(n/2) - d2 (rounding n/2 down)
 
 Solution* localSearch(Solution* solution);
+Solution* localSearch3(Solution* solution);
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
@@ -68,21 +69,6 @@ void deleteSolution(pii** solution) {
     delete [] solution;
 }
 
-long cost(pii** solution) {
-	int** dist = problemData.dist;
-	int nRounds = problemData.nRounds;
-	int n = problemData.n;
-
-	long cost = 0;
-
-	for(int i = 0; i < n; i++) {
-		for(int j = 0; j < nRounds-1; j++) {
-			cost = cost + dist[solution[j][i].first][solution[j+1][i].first];
-		}
-	}
-	return cost;
-}
-
 void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents, 
 	int timewindow4, int timewindow5, long penaltyRate) {
 	
@@ -96,12 +82,23 @@ void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents,
 	problemData.penaltyRate = penaltyRate;
 }
 
-void printSolution(pii** solution) {
+/*void printSolution(pii** solution) {
 	std::cout << "============================" << std::endl;
 	for(int i = 0; i < problemData.nRounds; i++) {
 		std::cout << "[" << i << "] ";
 		for(int j = 0; j < problemData.n; j++) {
 			std::cout << "(" << solution[i][j].first << ", " << solution[i][j].second << ") ";
+		}
+		std::cout << std::endl;
+	}
+	std::cout << "============================" << std::endl;
+}*/
+
+void printSolution(pii** solution) {
+	std::cout << "============================" << std::endl;
+	for(int i = 0; i < problemData.n; i++) {
+		for(int j = 0; j < problemData.nRounds; j++) {
+			std::cout << solution[j][i].first+1 << " ";
 		}
 		std::cout << std::endl;
 	}
@@ -123,9 +120,15 @@ void shuffle(int* myArray, size_t n) {
     }
 }
 
+void fill(int* myArray, size_t n) {
+    for(int i = 0; i < n; i++) {
+        myArray[i] = i;
+    }
+}
+
 // mutation
 // 1 <= mutateRate <= nRounds
-pii** mutation(pii** solution, int mutationRate) {
+pii** mutation(pii** solution, const int mutationRate, const int q) {
 	int nRounds = problemData.nRounds;
 	int nTeams = problemData.nTeams;
 	int n = problemData.n;
@@ -147,7 +150,7 @@ pii** mutation(pii** solution, int mutationRate) {
 	int r2;
 	pii temp;
 	
-	for(int i = 0; i < mutationRate; i++) {
+	/*for(int i = 0; i < mutationRate; i++) {
 		r = shRounds[i]; // random slot
 		int* shGames = new int[n];
 		shuffle(shGames, n);
@@ -159,9 +162,88 @@ pii** mutation(pii** solution, int mutationRate) {
 		delete [] shGames;
 	}
 
+	for(int i = 0; i < mutationRate; i++) {
+		r = shRounds[i]; // random slot
+		int* shGames = new int[n];
+		shuffle(shGames, n);
+		for(int j = 0; j < n; j++) {
+			newsolution[r][j] = solution[r][shGames[j]];
+		}
+		delete [] shGames;
+	}*/
+
+	int j, g;
+	/*for(int i = 0; i < mutationRate; i++) {
+		r = shRounds[i]; // random slot
+		int* shGames = new int[n];
+		shuffle(shGames, n);
+		for(int j = 0; j < q; j++) {
+			newsolution[r][j] = solution[r][shGames[j]];
+			newsolution[r][shGames[j]] = solution[r][j];
+		}
+		delete [] shGames;
+	}*/
+
+	for(int i = 0; i < mutationRate; i++) {
+		r = shRounds[i]; // random slot
+		int* shGames = new int[n];
+		shuffle(shGames, n);
+		for(int j1 = 0; j1 < q; j1++) {
+			j = shGames[j1];
+			g = shGames[n-j1-1];
+			temp = newsolution[r][j];
+			newsolution[r][j] = newsolution[r][g];
+			newsolution[r][g] = temp;
+		}
+		delete [] shGames;
+	}
+
 	delete [] shRounds;
 	
 	return newsolution;
+}
+
+Solution* construct(pii** baseScheduling) {
+	int nRounds = problemData.nRounds;
+	int nTeams = problemData.nTeams;
+	int n = problemData.n;
+	int** dist = problemData.dist;
+
+	pii** greedyScheduling = new pii*[nRounds];
+	for(int i = 0; i < nRounds; i++) {
+		greedyScheduling[i] = new pii[n];
+	}
+
+	for(int i = 0; i < n; i++) {
+		greedyScheduling[0][i] = baseScheduling[0][i];
+	}
+
+	int* visited = new int[n];
+	int u;
+	long max;
+
+	for(int i = 1; i < nRounds; i++) {
+		int* shGames = new int[n];
+		shuffle(shGames, n);
+		for(int j = 0; j < n; j++) {
+			visited[j] = 0;
+		}
+		for(int j = 0; j < n; j++) {
+			max = 99999999;
+			u = shGames[j];
+			if(dist[greedyScheduling[i-1][u].first][baseScheduling[i][j].first] < max && visited[j] == 0) {
+				visited[j] = 1;
+				greedyScheduling[i][u].first = baseScheduling[i][j].first;
+				greedyScheduling[i][u].second = baseScheduling[i][j].second;
+			}
+		}
+		delete [] shGames;
+	}
+	delete [] visited;
+	Solution* greedySolution = new Solution(greedyScheduling, problemData);
+	greedySolution = localSearch(greedySolution);
+
+	return greedySolution;
 }
 
 int uFeasibility3(pii** solution, int u, int s, int crossPoint) {
@@ -409,11 +491,7 @@ pii** crossover(pii** p1, pii** p2) {
 		}
 	}
 
-	std::vector<long> matching = match(offspring, crossPoint);
-
-	//for(int i = 0; i < n; i++) {
-	//	std::cout << matching[i] << " ";
-	//} std::cout << std::endl;
+	/*std::vector<long> matching = match(offspring, crossPoint);
 
 	pii** offspringMatching = new pii*[nRounds];
 	for(int i = 0; i < nRounds; i++) {
@@ -434,9 +512,9 @@ pii** crossover(pii** p1, pii** p2) {
 		}
 	}
 
-	deleteSolution(offspring);
+	deleteSolution(offspring);*/
 
-	return offspringMatching;
+	return offspring;
 }
 
 std::vector<Solution*> selectSurvivors(HeapPdi* costHeap, std::vector<Solution*> population, int sizePopulation) {
@@ -449,6 +527,10 @@ std::vector<Solution*> selectSurvivors(HeapPdi* costHeap, std::vector<Solution*>
     std::vector<Solution*> newPopulation;
     int* discarded = new int[maxPopulation];
     int id;
+
+    if(population.size() < sizePopulation) {
+    	sizePopulation = population.size();
+    }
 
     for(int i = 0; i < maxPopulation; i++) {
         Solution* solution = population[i];
@@ -509,15 +591,18 @@ std::vector<Solution*> selectSurvivors(HeapPdi* costHeap, std::vector<Solution*>
 std::vector<Solution*> getRandomPopulation(std::vector<Solution*> elitePopulation, int numNew) {
 	std::vector<Solution*> randomPopulation;
 	int j = 0;
+	int r;
 	for(int i = 0; i < numNew; i++) {
-		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds);
+		//r = rand() % elitePopulation.size();
+		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds, 3);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
-		//mutatedSolution = localSearch(mutatedSolution);
+		mutatedSolution = localSearch(mutatedSolution);
+		mutatedSolution = localSearch3(mutatedSolution);
 		randomPopulation.push_back(mutatedSolution);
-		/*j++;
-		if(j >= 0.5*elitePopulation.size()) {
+		j++;
+		if(j >= 1.0*elitePopulation.size()) {
 			j = 0;
-		}*/
+		}
 	}
 	return randomPopulation;
 }
@@ -605,6 +690,114 @@ Solution* localSearch(Solution* solution) {
 	return solution;
 }
 
+Solution* localSearch2(Solution* solution) {
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+	int* shRounds = new int[nRounds];
+	bool improving = true;
+	int r;
+	pii temp;
+
+	while(improving) {
+		shuffle(shRounds, nRounds);
+		improving = false;
+		for(int i1 = 0; i1 < nRounds; i1++) {
+			r = shRounds[i1];
+			//int* shGames = new int[n];
+			//shuffle(shGames, n);
+			for(int i = 0; i < n; i++) {
+				for(int j = i+1; j < n; j++) {
+					pii** scheduling = new pii*[nRounds];
+					for(int q1 = 0; q1 < nRounds; q1++) {
+						scheduling[q1] = new pii[n];
+						for(int q2 = 0; q2 < n; q2++) {
+							scheduling[q1][q2] = solution->getScheduling()[q1][q2];
+						}
+					}
+					temp = scheduling[r][i];
+					scheduling[r][i] = scheduling[r][j];
+					scheduling[r][j] = temp;
+					Solution* newSolution = new Solution(scheduling, problemData);
+					if(newSolution->getCorrectedCost() < solution->getCorrectedCost()) {
+						delete solution;
+						solution = NULL;
+						solution = newSolution;
+						improving = true;
+					} else {
+						delete newSolution;
+					}
+				}
+			}
+			//delete [] shGames;
+		}	
+	}
+	
+	delete [] shRounds;
+
+	return solution;
+}
+
+Solution* localSearch3(Solution* solution) {
+	int nRounds = problemData.nRounds;
+	int n = problemData.n;
+	int* shRounds = new int[nRounds];
+	bool improving = true;
+	int r;
+	pii temp;
+
+	int totalViolationsDelta;
+	int totalViolationsDeltaI;
+	int totalViolationsDeltaJ;
+	long costDelta;
+	long costDeltaI;
+	long costDeltaJ;
+	long newCorrectedCost;
+
+	while(improving) {
+		shuffle(shRounds, nRounds);
+		improving = false;
+		for(int i1 = 0; i1 < nRounds; i1++) {
+			r = shRounds[i1];
+			//int* shGames = new int[n];
+			//shuffle(shGames, n);
+			for(int i = 0; i < n; i++) {
+				for(int j = i+1; j < n; j++) {
+					
+					totalViolationsDeltaI = solution->umpireConst3Delta(i, j, r) +
+											solution->umpireConst4Delta(i, j, r) +
+											solution->umpireConst5Delta(i, j, r);
+					
+					totalViolationsDeltaJ = solution->umpireConst3Delta(j, i, r) +
+											solution->umpireConst4Delta(j, i, r) +
+											solution->umpireConst5Delta(j, i, r);
+
+					totalViolationsDelta = totalViolationsDeltaI + totalViolationsDeltaJ;
+
+					costDeltaI = solution->umpireCostDelta(i, j, r);
+					costDeltaJ = solution->umpireCostDelta(j, i, r);
+					costDelta = costDeltaI + costDeltaJ;
+
+					newCorrectedCost = problemData.penaltyRate*(solution->getTotalViolations() + totalViolationsDelta) +
+										(solution->getCost() + costDelta);
+
+					//int nv = solution->getNbViolations5() + solution->umpireConst5Delta(i, j, r) + solution->umpireConst5Delta(j, i, r);
+
+					if(newCorrectedCost < solution->getCorrectedCost()) {
+						solution->swap(i, j, r);
+						improving = true;
+						//std::cout << "assert? = " << (solution->getNbViolations5() == nv) << std::endl;
+					}
+				}
+			}
+			//delete [] shGames;
+		}	
+	}
+	
+	delete [] shRounds;
+
+	return solution;
+}
+
 void run() {
 	int nTeams = problemData.nTeams;
 	int nRounds = problemData.nRounds;
@@ -614,13 +807,12 @@ void run() {
 
 	const int maxPopulation = 1200;
 	const int sizePopulation = 200;
-	const int maxIt = 200000;
+	const int maxIt = 50000;
 	const int itNoImp = 80000;
-	const int itDiv = 10000;
+	const int initPopSize = 500;
+	const int itDiv = 2000;
 	const int numKeep = sizePopulation;
 	const int numNew = 2*sizePopulation;
-	int lastImprovement = 0;
-    int lastDiv = 0;
 	
 	HeapPdi* costHeap = new HeapPdi();
 
@@ -666,33 +858,42 @@ void run() {
 
 	std::vector<Solution*> population;
 	Solution* solution = new Solution(scheduling, problemData);
+	solution = localSearch(solution);
+	solution = localSearch3(solution);
 	Solution* bestSolution = solution;
 	long bestCost = solution->getCorrectedCost();
 	Solution* currSolution;
 	long ccost;
+	int lastImprovement = 0;
+    int lastDiv = 0;
 	int it = 0;
-	std::cout << "f(" << it << ") = " << bestSolution->getCorrectedCost() << std::endl;
 
-	for(int i = 0; i < 1000; i++) {
-		pii** newScheduling = mutation(solution->getScheduling(), nRounds);
+	std::cout << solution->getCost() << " " << solution->getTotalViolations() << std::endl;
+
+	for(int i = 0; i < initPopSize; i++) {
+		pii** newScheduling = mutation(bestSolution->getScheduling(), nRounds, 3);
 		Solution* newSolution = new Solution(newScheduling, problemData);
+		//newSolution = localSearch(newSolution);
+		newSolution = localSearch3(newSolution);
 		population.push_back(newSolution);
 		costHeap->push_min(newSolution->getCorrectedCost(), i);
 		if(newSolution->getCorrectedCost() < bestSolution->getCorrectedCost()) {
 			bestSolution = newSolution;
 		}
+		std::cout << i << ") = " << newSolution->getTotalViolations() << std::endl;
 	}
 
 	while((it-lastImprovement < itNoImp) && (it < maxIt)) {
 		pii** p1 = tournamentSelection(population);
 		pii** p2 = tournamentSelection(population);
 		pii** offspring = crossover(p1, p2);	
-		pii** mutated = mutation(offspring, 2);
+		pii** mutated = mutation(offspring, 1, 1);
 
 		Solution* offspringSolution = new Solution(offspring, problemData);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
 
 		offspringSolution = localSearch(offspringSolution);
+		offspringSolution = localSearch3(offspringSolution);
 
 		population.push_back(offspringSolution);
 		costHeap->push_min(offspringSolution->getCorrectedCost(), population.size() - 1);
@@ -721,23 +922,26 @@ void run() {
             population = diversifyPopulation(costHeap, population, numKeep, numNew);
             if(costHeap->front_min().first < bestSolution->getCorrectedCost()) {
                 lastImprovement = it;
+                // should copy. may be getting a deleted solution
                 bestSolution = population[costHeap->front_min().second];
             }
         }
 
-		it++;
-		std::cout << "f(" << it << ") = "
+        std::cout << "f(" << it << ") = "
 					<< bestSolution->getCorrectedCost() << " "
 					<< bestSolution->getCost() << " "
 					<< bestSolution->getTotalViolations() << " "
 					<< lastImprovement << std::endl;
+		it++;
 	}
 
 	printSolution(bestSolution->getScheduling());
-	
+
 	delete costHeap;
 	deleteMatrix(games, nRounds);
-	deleteSolution(scheduling);
+	for(int i = 0; i < population.size(); i++) {
+		delete population[i];	
+	}
 }
 
 int main() {

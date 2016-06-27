@@ -1,5 +1,5 @@
-#ifndef Max_Cost_Assignment
-#define Max_Cost_Assignment
+#ifndef Min_Cost_Assignment
+#define Min_Cost_Assignment
 
 #include "dlib-master/dlib/optimization/max_cost_assignment.h"
 #include <iostream>

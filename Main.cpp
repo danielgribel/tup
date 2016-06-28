@@ -21,13 +21,19 @@
 const double MAX_LONG = std::numeric_limits<long>::max();
 
 ProblemData problemData;
-const string inputFile = "data/umps16.txt";
+const string inputFile = "data/umps14.txt";
 const int penaltyRate = 100000;
 const int d4 = 7; // d4 = n - d1
-const int d5 = 4; // d5 = \floor(n/2) - d2 (rounding n/2 down)
+const int d5 = 3; // d5 = floor(n/2) - d2 (rounding n/2 down)
+
+Solution* segmentsMatching(Solution* solution);
 
 Solution* localSearch(Solution* solution);
-Solution* localSearch3(Solution* solution);
+
+Solution* localImprovement(Solution* solution) {
+	solution = segmentsMatching(solution);
+	solution = localSearch(solution);
+}
 
 bool isNum(char c) {
     return std::string("-0123456789 ").find(c) != std::string::npos;
@@ -241,7 +247,7 @@ Solution* construct(pii** baseScheduling) {
 	}
 	delete [] visited;
 	Solution* greedySolution = new Solution(greedyScheduling, problemData);
-	greedySolution = localSearch(greedySolution);
+	greedySolution = segmentsMatching(greedySolution);
 
 	return greedySolution;
 }
@@ -596,8 +602,7 @@ std::vector<Solution*> getRandomPopulation(std::vector<Solution*> elitePopulatio
 		//r = rand() % elitePopulation.size();
 		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds, 3);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
-		mutatedSolution = localSearch(mutatedSolution);
-		mutatedSolution = localSearch3(mutatedSolution);
+		mutatedSolution = localImprovement(mutatedSolution);
 		randomPopulation.push_back(mutatedSolution);
 		j++;
 		if(j >= 1.0*elitePopulation.size()) {
@@ -639,7 +644,7 @@ std::vector<Solution*> diversifyPopulation(
     return newPopulation;
 }
 
-Solution* localSearch(Solution* solution) {
+Solution* segmentsMatching(Solution* solution) {
 	int nRounds = problemData.nRounds;
 	int n = problemData.n;
 	int crossPoint;
@@ -690,54 +695,7 @@ Solution* localSearch(Solution* solution) {
 	return solution;
 }
 
-Solution* localSearch2(Solution* solution) {
-	int nRounds = problemData.nRounds;
-	int n = problemData.n;
-	int* shRounds = new int[nRounds];
-	bool improving = true;
-	int r;
-	pii temp;
-
-	while(improving) {
-		shuffle(shRounds, nRounds);
-		improving = false;
-		for(int i1 = 0; i1 < nRounds; i1++) {
-			r = shRounds[i1];
-			//int* shGames = new int[n];
-			//shuffle(shGames, n);
-			for(int i = 0; i < n; i++) {
-				for(int j = i+1; j < n; j++) {
-					pii** scheduling = new pii*[nRounds];
-					for(int q1 = 0; q1 < nRounds; q1++) {
-						scheduling[q1] = new pii[n];
-						for(int q2 = 0; q2 < n; q2++) {
-							scheduling[q1][q2] = solution->getScheduling()[q1][q2];
-						}
-					}
-					temp = scheduling[r][i];
-					scheduling[r][i] = scheduling[r][j];
-					scheduling[r][j] = temp;
-					Solution* newSolution = new Solution(scheduling, problemData);
-					if(newSolution->getCorrectedCost() < solution->getCorrectedCost()) {
-						delete solution;
-						solution = NULL;
-						solution = newSolution;
-						improving = true;
-					} else {
-						delete newSolution;
-					}
-				}
-			}
-			//delete [] shGames;
-		}	
-	}
-	
-	delete [] shRounds;
-
-	return solution;
-}
-
-Solution* localSearch3(Solution* solution) {
+Solution* localSearch(Solution* solution) {
 	int nRounds = problemData.nRounds;
 	int n = problemData.n;
 	int* shRounds = new int[nRounds];
@@ -858,8 +816,7 @@ void run() {
 
 	std::vector<Solution*> population;
 	Solution* solution = new Solution(scheduling, problemData);
-	solution = localSearch(solution);
-	solution = localSearch3(solution);
+	solution = localImprovement(solution);
 	Solution* bestSolution = solution;
 	long bestCost = solution->getCorrectedCost();
 	Solution* currSolution;
@@ -873,8 +830,7 @@ void run() {
 	for(int i = 0; i < initPopSize; i++) {
 		pii** newScheduling = mutation(bestSolution->getScheduling(), nRounds, 3);
 		Solution* newSolution = new Solution(newScheduling, problemData);
-		//newSolution = localSearch(newSolution);
-		newSolution = localSearch3(newSolution);
+		newSolution = localSearch(newSolution);
 		population.push_back(newSolution);
 		costHeap->push_min(newSolution->getCorrectedCost(), i);
 		if(newSolution->getCorrectedCost() < bestSolution->getCorrectedCost()) {
@@ -892,8 +848,7 @@ void run() {
 		Solution* offspringSolution = new Solution(offspring, problemData);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
 
-		offspringSolution = localSearch(offspringSolution);
-		offspringSolution = localSearch3(offspringSolution);
+		offspringSolution = localImprovement(offspringSolution);
 
 		population.push_back(offspringSolution);
 		costHeap->push_min(offspringSolution->getCorrectedCost(), population.size() - 1);

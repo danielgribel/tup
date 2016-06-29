@@ -21,7 +21,7 @@
 const double MAX_LONG = std::numeric_limits<long>::max();
 
 ProblemData problemData;
-const string inputFile = "data/umps14.txt";
+string inputFile;
 const int penaltyRate = 100000;
 const int d4 = 7; // d4 = n - d1
 const int d5 = 3; // d5 = floor(n/2) - d2 (rounding n/2 down)
@@ -88,12 +88,12 @@ void setProblemData(int nTeams, int nRounds, int n, int** dist, int** opponents,
 	problemData.penaltyRate = penaltyRate;
 }
 
+
 /*void printSolution(pii** solution) {
 	std::cout << "============================" << std::endl;
-	for(int i = 0; i < problemData.nRounds; i++) {
-		std::cout << "[" << i << "] ";
-		for(int j = 0; j < problemData.n; j++) {
-			std::cout << "(" << solution[i][j].first << ", " << solution[i][j].second << ") ";
+	for(int i = 0; i < problemData.n; i++) {
+		for(int j = 0; j < problemData.nRounds; j++) {
+			std::cout << "(" << solution[j][i].first+1 << ", " << solution[j][i].second+1 << ")\t";
 		}
 		std::cout << std::endl;
 	}
@@ -485,6 +485,8 @@ pii** crossover(pii** p1, pii** p2) {
 	
 	int crossPoint = rand() % (nRounds-1) + 1;
 
+	//std::cout << "crossPoint = " << crossPoint << std::endl;
+
 	for(int i = 0; i < crossPoint; i++) {
 		for(int j = 0; j < n; j++) {
 			offspring[i][j] = p1[i][j];
@@ -600,9 +602,9 @@ std::vector<Solution*> getRandomPopulation(std::vector<Solution*> elitePopulatio
 	int r;
 	for(int i = 0; i < numNew; i++) {
 		//r = rand() % elitePopulation.size();
-		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds, 3);
+		pii** mutated = mutation(elitePopulation[j]->getScheduling(), problemData.nRounds/2, problemData.n/2);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
-		mutatedSolution = localImprovement(mutatedSolution);
+		mutatedSolution = localSearch(mutatedSolution);
 		randomPopulation.push_back(mutatedSolution);
 		j++;
 		if(j >= 1.0*elitePopulation.size()) {
@@ -700,7 +702,7 @@ Solution* localSearch(Solution* solution) {
 	int n = problemData.n;
 	int* shRounds = new int[nRounds];
 	bool improving = true;
-	int r;
+	int r, i, j;
 	pii temp;
 
 	int totalViolationsDelta;
@@ -716,11 +718,12 @@ Solution* localSearch(Solution* solution) {
 		improving = false;
 		for(int i1 = 0; i1 < nRounds; i1++) {
 			r = shRounds[i1];
-			//int* shGames = new int[n];
-			//shuffle(shGames, n);
-			for(int i = 0; i < n; i++) {
-				for(int j = i+1; j < n; j++) {
-					
+			int* shGames = new int[n];
+			shuffle(shGames, n);
+			for(int i1 = 0; i1 < n; i1++) {
+				i = shGames[i1];
+				for(int j1 = i1+1; j1 < n; j1++) {
+					j = shGames[j1];
 					totalViolationsDeltaI = solution->umpireConst3Delta(i, j, r) +
 											solution->umpireConst4Delta(i, j, r) +
 											solution->umpireConst5Delta(i, j, r);
@@ -747,7 +750,7 @@ Solution* localSearch(Solution* solution) {
 					}
 				}
 			}
-			//delete [] shGames;
+			delete [] shGames;
 		}	
 	}
 	
@@ -766,7 +769,7 @@ void run() {
 	const int maxPopulation = 1200;
 	const int sizePopulation = 200;
 	const int maxIt = 50000;
-	const int itNoImp = 80000;
+	const int itNoImp = 20000;
 	const int initPopSize = 500;
 	const int itDiv = 2000;
 	const int numKeep = sizePopulation;
@@ -828,7 +831,7 @@ void run() {
 	std::cout << solution->getCost() << " " << solution->getTotalViolations() << std::endl;
 
 	for(int i = 0; i < initPopSize; i++) {
-		pii** newScheduling = mutation(bestSolution->getScheduling(), nRounds, 3);
+		pii** newScheduling = mutation(bestSolution->getScheduling(), nRounds/2, n/2);
 		Solution* newSolution = new Solution(newScheduling, problemData);
 		newSolution = localSearch(newSolution);
 		population.push_back(newSolution);
@@ -842,10 +845,20 @@ void run() {
 	while((it-lastImprovement < itNoImp) && (it < maxIt)) {
 		pii** p1 = tournamentSelection(population);
 		pii** p2 = tournamentSelection(population);
-		pii** offspring = crossover(p1, p2);	
-		pii** mutated = mutation(offspring, 1, 1);
-
+		
+		pii** offspring = crossover(p1, p2);
 		Solution* offspringSolution = new Solution(offspring, problemData);
+
+		/*if(offspringSolution->getTotalViolations() == 0) {
+			std::cout << "p1\n";
+			printSolution(p1);
+			std::cout << "p2\n";
+			printSolution(p2);
+			std::cout << "off\n";
+			printSolution(offspringSolution->getScheduling());
+		}*/
+
+		pii** mutated = mutation(offspring, 1, 1);
 		Solution* mutatedSolution = new Solution(mutated, problemData);
 
 		offspringSolution = localImprovement(offspringSolution);
@@ -895,12 +908,16 @@ void run() {
 	delete costHeap;
 	deleteMatrix(games, nRounds);
 	for(int i = 0; i < population.size(); i++) {
-		delete population[i];	
+		delete population[i];
 	}
 }
 
-int main() {
+int main(int argc, char** argv) {
 	srand(0);
+	
+	/*Get the arguments passed by the user*/
+	inputFile = argv[1];
+
 	loadData();
 	
 	clock_t begin = clock();
